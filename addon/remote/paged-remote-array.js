@@ -122,7 +122,7 @@ export default Ember.ArrayProxy.extend(PageMixin, Ember.Evented, ArrayProxyPromi
   	});
 
   	return res;
-  }
+  },
 
   totalPagesBinding: "meta.total_pages",
 

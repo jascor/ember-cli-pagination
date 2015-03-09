@@ -17,6 +17,9 @@ var ArrayProxyPromiseMixin = Ember.Mixin.create(Ember.PromiseProxyMixin, {
 
 export default Ember.ArrayProxy.extend(PageMixin, Ember.Evented, ArrayProxyPromiseMixin, {
   page: 1,
+
+  loading: false,
+
   paramMapping: function() {
     return {};
   }.property(''),
@@ -78,25 +81,48 @@ export default Ember.ArrayProxy.extend(PageMixin, Ember.Evented, ArrayProxyPromi
     return res;
   },
 
+  /*
+   * Replaced original fetchContent method in order to add
+   * a 'loading' property in the model while the page content
+   * is being requested.
+   *
+   * Source: https://github.com/mharris717/ember-cli-pagination/issues/64 (matheusdavidson)
+   */
   fetchContent: function() {
-    var res = this.rawFindFromStore();
-    this.incrementProperty("numRemoteCalls");
-    var me = this;
+  	this.set('loading', true);
 
-    res.then(function(rows) {
-      var metaObj = ChangeMeta.create({paramMapping: me.get('paramMapping'),
-                                       meta: rows.meta,
-                                       page: me.getPage(),
-                                       perPage: me.getPerPage()});
+  	var store = this.get('store');
+  	var modelName = this.get('modelName');
 
-      return me.set("meta", metaObj.make());
-      
-    }, function(error) {
-      Util.log("PagedRemoteArray#fetchContent error " + error);
-    });
+  	var ops = this.get('paramsForBackend');
+  	var res = store.find(modelName, ops);
+  	this.incrementProperty('numRemoteCalls');
+  	var me = this;
 
-    return res;
-  },  
+  	res.then(function(rows) {
+  		var newMeta = {};
+  		var totalPagesField = me.get('paramMapping').total_pages;
+
+  		if (rows.meta) {
+  			for (var k in rows.meta) {
+  				newMeta[k] = rows.meta[k];
+  			}
+
+  			if (totalPagesField && totalPagesField === k) {
+  				newMeta['total_pages'] = rows.meta[k];
+  			}
+  		}
+
+  		me.set('loading', false);
+
+  		return me.set('meta', newMeta);
+  	}, function(error) {
+  		me.set('loading', false);
+  		Util.log('PagedRemoteArray#fetchContent error ' + error);
+  	});
+
+  	return res;
+  }
 
   totalPagesBinding: "meta.total_pages",
 
